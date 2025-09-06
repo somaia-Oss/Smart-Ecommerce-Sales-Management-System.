@@ -1,0 +1,189 @@
+
+--===================**Customer Table**=======================
+create table customer(
+    Cus_ID  INT primary key,
+    Name nvarchar(100),
+    Gender nvarchar(10),
+    Age int,
+   sex nvarchar(10),
+   Email nvarchar(100) unique
+)
+--===================**Cus_location**===========================
+create table Cus_location(
+  Cus_ID int ,
+  Country nvarchar(50),
+  state nvarchar(50),
+  city nvarchar(50),
+  region nvarchar(50),
+  street nvarchar(50),
+  primary key ( Cus_ID,Country,state,city,region,street),
+  FOREIGN key (Cus_ID) REFERENCES customer(Cus_ID)
+  )
+
+  --===================**Product**=========================
+  create table product(
+  Pro_ID int primary key,
+  name nvarchar(50),
+  price decimal(10,2),
+  Avl_quantity int,
+  describe nvarchar(200)
+  )
+
+
+--======================**Pro_category**=======================
+  create table Pro_category(
+   Pro_ID int primary key,
+   category nvarchar (100),
+   foreign key (Pro_ID) references product(Pro_ID)
+   )
+
+   --==================**Review**==========================
+   create table review(
+     Rev_ID int primary key,
+	 rating int CHECK (rating between 1 and 5),
+	 comment nvarchar(1000),
+	 Rev_date date,
+	 Pro_ID INT,
+ Foreign key (Pro_ID) references product(Pro_ID)
+)
+
+--=======================**Orders**====================
+create table OrderS(
+ order_ID int primary key,
+ Date  date,
+ Total_price decimal (10,2),
+ status nvarchar(50),
+ Cus_ID int,
+ fOREIGN key (Cus_ID) REFERENCES customer(Cus_ID)
+ )
+
+ --==============================**Ord_Details**======================
+ create table Ord_Details(
+  order_ID int ,
+  product_ID int ,
+  Quantity int check (quantity >0),
+  PRIMARY KEY (order_ID,product_ID),
+  FOREIGN KEY (Order_ID) REFERENCES OrderS(Order_ID),
+  FOREIGN KEY (product_ID) REFERENCES product(Pro_ID)
+  )
+
+
+  --========================**Payment**=================================
+  create table Payment(
+  Pay_ID int primary key,
+  Date date,
+  pay_method nvarchar(50),
+  price decimal(10,2),
+  Order_ID int ,
+  fOREIGN KEY (Order_ID) REFERENCES OrderS(Order_ID)
+ )
+
+ --===============================**shipping**===================
+ create table shipping(
+  shipping_ID int primary key,
+  sh_cost decimal(10,2),
+  Delv_Date date,
+  Will_shipping nvarchar(50),
+  Order_ID int ,
+  fOREIGN KEY (Order_ID) REFERENCES OrderS(Order_ID)
+ )
+
+ --==============Index to facilate search==========
+
+ CREATE INDEX idx_orders_cusid ON Orders (Cus_ID)
+
+CREATE INDEX idx_review_proid ON Review (Pro_ID)
+
+--==================Test Data=================
+
+INSERT INTO Customer (Cus_ID, Name, Gender, Age, Sex, Email)
+VALUES (1, 'Ahmed Ali', 'Male', 28, 'M', 'ahmed@example.com');
+
+INSERT INTO Product (Pro_ID, Name, Price, Avl_quantity, Describe)
+VALUES (101, 'Laptop', 15000.00, 5, 'Gaming laptop');
+
+INSERT INTO Orders (Order_ID, Date, Total_Price, Status, Cus_ID)
+VALUES (5001, '2025-08-07', 15000.00, 'Processing', 1);
+
+INSERT INTO Ord_Details (Order_ID, Product_ID, Quantity)
+VALUES (5001, 101, 1)
+
+---==================procedure==========================
+GO
+CREATE PROCEDURE AddNewOrder
+    @CustomerID INT,
+    @ProductID INT,
+    @Quantity INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+       
+        INSERT INTO Orders (Cus_ID)
+        VALUES (@CustomerID);
+
+        DECLARE @OrderID INT = SCOPE_IDENTITY();
+
+        
+        INSERT INTO Ord_Details (order_ID, product_ID, Quantity)
+        VALUES (@OrderID, @ProductID, @Quantity);
+
+        COMMIT TRANSACTION;
+        PRINT 'Added Successfully';
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR('There is an Error', 16, 1, @ErrorMessage);
+    END CATCH
+END;
+
+--====================Triger========================
+Go
+CREATE TRIGGER trg_OrderUpdate
+ON Orders
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO Orders_Log (Order_ID, Action, ActionDate)
+    SELECT Order_ID, 'Updated', GETDATE()
+    FROM inserted;
+END;
+Go
+--===================View======================
+CREATE VIEW CustomerOrdersView AS
+SELECT 
+    c.Cus_ID,
+    c.Name,
+    o.order_ID,
+    o.Date,
+    od.Product_ID,
+    od.Quantity
+FROM Orders o
+JOIN Customer c
+    ON o.Cus_ID = c.Cus_ID
+JOIN Ord_Details od
+    ON o.order_ID = od.order_ID;
+
+	--======================user_defined_function=====================
+GO	
+	CREATE FUNCTION dbo.GetTotalQuantity(@OrderID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @TotalQty INT;
+
+    SELECT @TotalQty = SUM(Quantity)
+    FROM Ord_Details
+    WHERE Order_ID = @OrderID;
+
+    RETURN @TotalQty;
+END;
+GO
+--================CONSTRAINTS=================
+ALTER TABLE Product
+ADD CONSTRAINT Price CHECK (Price > 0);
